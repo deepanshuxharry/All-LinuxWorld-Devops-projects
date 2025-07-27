@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins-slave
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: jenkins-slave
+  template:
+    metadata:
+      labels:
+        app: jenkins-slave
+    spec:
+      containers:
+      - name: jenkins-slave-container
+        image: sayantan2k21/jenkins-slave:rhel9-v1
+        securityContext:
+          privileged: true
+        ports:
+        - containerPort: 22

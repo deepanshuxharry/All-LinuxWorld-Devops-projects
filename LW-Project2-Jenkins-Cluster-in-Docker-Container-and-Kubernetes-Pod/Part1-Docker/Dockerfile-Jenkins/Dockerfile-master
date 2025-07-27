@@ -1,0 +1,60 @@
+FROM redhat/ubi9:latest
+
+LABEL maintainer="sayantan2k21"
+
+# System cleanup and core tools
+RUN dnf clean all && \
+    dnf -y update && \
+    dnf install -y \
+        dnf-plugins-core \
+        sudo \
+        git \
+        wget \
+        unzip \
+        yum-utils \
+        openssh \
+        openssh-server \
+        openssh-clients && \
+    dnf clean all
+
+# Docker repo & install
+RUN dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo && \
+    dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && \
+    dnf clean all
+
+# Create Jenkins user and give access
+RUN useradd -m -s /bin/bash -d /var/lib/jenkins jenkins && \
+    echo "jenkins:jenkins123" | chpasswd && \
+    echo 'jenkins ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+    usermod -aG docker jenkins
+
+# Jenkins repo and install
+RUN wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat/jenkins.repo && \
+    rpm --import https://pkg.jenkins.io/redhat/jenkins.io-2023.key && \
+    dnf upgrade -y && \
+    dnf install -y fontconfig java-21-openjdk jenkins  && \
+    dnf clean all
+
+# Set permissions for Jenkins WAR
+RUN chown jenkins:jenkins /usr/share/java/jenkins.war
+
+# SSH Configuration
+RUN ssh-keygen -A && \
+    mkdir -p /etc/ssh/sshd_config.d && \
+    echo "PermitRootLogin no" > /etc/ssh/sshd_config.d/custom.conf && \
+    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config.d/custom.conf && \
+    echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config.d/custom.conf && \
+    echo "UsePAM yes" >> /etc/ssh/sshd_config.d/custom.conf
+
+# Switch to Jenkins user
+USER jenkins
+
+# Jenkins workdir
+WORKDIR /var/lib/jenkins
+
+# Expose Jenkins + SSH
+EXPOSE 8080 50000 22
+
+
+# Start Jenkins as jenkins user
+ENTRYPOINT ["bash", "-c", "sudo dockerd & sleep 3 && sudo /usr/sbin/sshd && exec java -jar /usr/share/java/jenkins.war"]
