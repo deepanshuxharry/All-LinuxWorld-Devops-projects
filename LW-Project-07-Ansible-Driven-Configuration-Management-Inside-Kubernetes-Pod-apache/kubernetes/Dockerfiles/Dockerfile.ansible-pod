@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+# Install only the required system packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    openssh-server \
+    openssh-client \
+    curl \
+    sshpass \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Ansible using pip
+RUN pip install --no-cache-dir ansible
+
+# Generate SSH host keys (required for sshd to run)
+RUN mkdir /var/run/sshd && \
+    ssh-keygen -A
+
+# Set working directory (home directory of root)
+WORKDIR /root
+
+# Default command
+CMD ["/bin/bash"]

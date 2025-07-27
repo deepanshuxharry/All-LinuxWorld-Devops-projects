@@ -1,0 +1,9 @@
+---
+- name: Setup Flask environment and run app
+  hosts: apache
+  tasks:
+  - name: Update Apache HTML page
+    ansible.builtin.copy:
+      src: files/index.html
+      dest: /var/www/html/index.html
+      mode: '0644'

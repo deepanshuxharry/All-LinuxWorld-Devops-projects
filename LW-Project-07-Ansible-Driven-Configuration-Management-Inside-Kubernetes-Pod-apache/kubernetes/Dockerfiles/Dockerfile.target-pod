@@ -1,0 +1,18 @@
+FROM ubuntu:22.04
+
+# Install Apache and SSH
+RUN apt-get update && \
+    apt-get install -y apache2 openssh-server && \
+    mkdir /var/run/sshd && \
+    echo 'root:root' | chpasswd && \
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/PermitRootLogin without-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    systemctl enable apache2
+
+RUN echo "This is index.html file" >  /var/www/html/index.html
+
+# Expose ports for Apache and SSH
+EXPOSE 80 22
+
+# Start both services
+CMD service ssh start && apachectl -D FOREGROUND

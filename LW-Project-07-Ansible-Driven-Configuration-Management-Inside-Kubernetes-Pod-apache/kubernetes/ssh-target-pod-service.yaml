@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: target-pod
+  labels:
+    app: ssh-target
+spec:
+  containers:
+    - name: ssh-target
+      image: ssh-target:latest
+      imagePullPolicy: Never  # <-- use minikube load
+      ports:
+        - name: ssh-port
+          containerPort: 22
+        - name: apache-port
+          containerPort: 80
+      securityContext:
+        privileged: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ssh-target-service
+spec:
+  selector:
+    app: ssh-target
+  type: NodePort
+  ports:
+    - name: ssh
+      port: 22
+      targetPort: 22
+      nodePort: 30022    # You can pick any port between 30000-32767
+    - name: apache
+      port: 80
+      targetPort: 80
+      nodePort: 30080

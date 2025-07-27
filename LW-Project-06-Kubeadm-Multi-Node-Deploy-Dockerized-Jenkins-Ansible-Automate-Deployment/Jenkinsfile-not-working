@@ -1,0 +1,93 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: image-builder-agent
+spec:
+  containers:
+  - name: dind-daemon
+    image: docker:24.0-dind
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: docker-graph-storage
+      mountPath: /var/lib/docker
+
+  - name: docker-cli
+    image: docker:24.0-cli
+    command:
+    - cat
+    tty: true
+    env:
+    - name: DOCKER_HOST
+      value: "tcp://localhost:2375"
+
+  volumes:
+  - name: docker-graph-storage
+    emptyDir: {}
+"""
+        }
+    }
+
+    environment {
+        DOCKER_REGISTRY = "docker.io/sayantan2k21"
+        APP_NAME = "06-flask-test-app"
+        IMAGE_NAME = "${DOCKER_REGISTRY}/${APP_NAME}"
+        GITHUB_SOURCE_CODE_REPO = "https://github.com/Sayantan2k24/LW-Project-06-Kubeadm-Multi-Node-Deploy-Dockerized-Jenkins-Ansible-Automate-Deployment.git"
+        BRANCH = "main"
+    }
+
+    stages {
+        stage('Docker Build & Push') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred', passwordVariable: 'pass', usernameVariable: 'user')]) {
+                    container('docker-cli') {
+                        script {
+                            sh """
+                            # Wait for DinD daemon to be fully ready
+                            until docker info; do echo "Waiting for Docker Daemon..."; sleep 2; done
+
+                            # Clone source code
+                            git clone -b ${BRANCH} ${GITHUB_SOURCE_CODE_REPO} workspace
+                            cd workspace/APP/
+
+                            # Login to DockerHub
+                            echo ${pass} | docker login -u ${user} --password-stdin
+
+                            # Build and Push
+                            docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
+                            docker push ${IMAGE_NAME}:${BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Trigger Ansible Deployment') {
+            steps {
+                script {
+                    sh """
+                    kubectl exec -n devops deployment/ansible -- bash -c 'cat <<EOF > /tmp/deploy-script.sh
+ansible-playbook /home/ansible/playbooks/deploy-app.yml --extra-vars "image_name=${IMAGE_NAME} image_tag=${BUILD_NUMBER} app_name=${APP_NAME}"
+EOF'
+                    kubectl exec -n devops deployment/ansible -- bash /tmp/deploy-script.sh
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Deployment successful!'
+        }
+        failure {
+            echo '❌ Deployment failed!'
+        }
+    }
+}
